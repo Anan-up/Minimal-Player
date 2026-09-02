@@ -1,4 +1,4 @@
-[English](https://github.com/Anan-up/Minimal-Player/blob/main/README.md) | [简体中文]([https://github.com/Anan-up/Small-fan/blob/main/README_Simplified_Chinese.md](https://github.com/Anan-up/Minimal-Player/blob/main/README_Simplified_Chinese.md)) | [繁体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Classical_Chinese.md.md)
+[English](https://github.com/Anan-up/Minimal-Player/blob/main/README.md) | [简体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Simplified_Chinese.md) | [繁体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Classical_Chinese.md.md)
 
 # Local Media Player
 
