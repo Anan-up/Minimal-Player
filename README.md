@@ -1,7 +1,5 @@
 [English](https://github.com/Anan-up/Minimal-Player/blob/main/README.md) | [简体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Simplified_Chinese.md) | [繁体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Classical_Chinese.md.md)
 
-# Local Media Player
-
 This is a **fully self-contained local media player** (HTML + CSS + JS) with zero external dependencies. All data is processed locally in the browser only, emphasizing privacy and minimalist interaction.
 
 ---
@@ -37,7 +35,7 @@ The player provides **two independent visual feedback mechanisms** for audio mod
 ### 5. Visual & Experience Style
 - **Minimalism**: Light background, thin borders, large rounded corners, stripped of redundant decoration.
 - **Interaction feedback**: Hover color changes, click animations, drag highlight borders — smooth and natural operation feel.
-
+![project-screenshot](player.png)
 ---
 
 ### License
