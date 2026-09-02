@@ -79,8 +79,9 @@ MediaElementSource → GainNode → DynamicsCompressor (限制器) → AnalyserN
 - **文件信息展示**：显示文件名、类型（视频/音频）和格式后缀。
 
 ---
+## 项目截图
 
-![project-screenshot](player.png)
+![项目截图](player.png)
 ---
 ### 许可证
 
