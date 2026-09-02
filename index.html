@@ -101,8 +101,11 @@
     flex:0 0 auto;
   }
   .btn:hover{border-color:#cfcfcf}
-  .btn:active{background:#f6f6f6}
+  .btn:active{background:#f6f6f6;transform:scale(.92)}
+  .btn.on{background:#111;border-color:#111;color:#fff}
   .btn svg{display:block}
+  @keyframes pop{0%{transform:scale(.85)}55%{transform:scale(1.1)}100%{transform:scale(1)}}
+  .play-btn.pop{animation:pop .22s ease}
   .play-btn{width:50px;height:50px}
 
   .time{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:96px;text-align:center}
@@ -110,6 +113,11 @@
 
   .volume{display:flex;align-items:center;gap:8px;flex:0 0 auto}
   .vol-slider{width:84px}
+  /* 增强面板展开/收起动画 */
+  #boostPanel{display:flex;align-items:center;gap:8px;max-height:60px;opacity:1;overflow:hidden;transition:max-height .22s ease,opacity .22s ease}
+  #boostPanel.collapsed{max-height:0;opacity:0;pointer-events:none}
+  /* 静音时隐藏（带过渡） */
+  .anim-hide{opacity:0!important;max-width:0!important;margin:0!important;pointer-events:none!important;overflow:hidden;transition:opacity .2s ease,max-width .2s ease,margin .2s ease}
 
   .spacer{flex:1 1 auto}
 
@@ -186,6 +194,19 @@
       <input type="range" class="vol-slider" id="vol" min="0" max="1" step="0.01" value="1">
     </div>
 
+    <div class="volume" id="boostGroup" title="音量增强开关：打开后显示倍率滑块">
+      <button class="btn" id="boostToggle" title="音量增强：关" style="width:36px;height:36px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 9v6h4l5 5V4L8 9H4z" stroke="none"/><path d="M16 9.5a4 4 0 010 5" fill="none"/><path d="M19 11v2" fill="none"/></svg>
+      </button>
+      <div id="boostPanel" class="collapsed" style="display:flex;align-items:center;gap:8px">
+        <input type="range" class="vol-slider" id="boost" min="1" max="10" step="0.1" value="1">
+        <span id="boostVal" style="font-size:11px;color:var(--muted);min-width:30px;text-align:left">1.0×</span>
+        <button class="btn on" id="limiterToggle" title="限制器：开" style="width:36px;height:36px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M6 17l3-5 3 4 3-7 3 5"/></svg>
+        </button>
+      </div>
+    </div>
+
     <div class="spacer"></div>
 
     <div class="speed">
@@ -218,7 +239,9 @@
         controls = $('controls'), playBtn = $('playBtn'), playIcon = $('playIcon'),
         curEl = $('cur'), durEl = $('dur'), vol = $('vol'), muteBtn = $('muteBtn'),
         volIcon = $('volIcon'), speedBtn = $('speedBtn'), speedMenu = $('speedMenu'),
-        fsBtn = $('fsBtn'), spectrum = $('spectrum'), sctx = spectrum.getContext('2d');
+        fsBtn = $('fsBtn'), spectrum = $('spectrum'), sctx = spectrum.getContext('2d'),
+        boostSlider = $('boost'), boostVal = $('boostVal'), boostToggle = $('boostToggle'),
+        boostPanel = $('boostPanel'), boostGroup = $('boostGroup'), limiterToggle = $('limiterToggle');
 
   const ctx2d = wave.getContext('2d');
   let peaks = null;          // Float32Array 波形峰值
@@ -227,8 +250,8 @@
   let isVideo = false;
 
   // 实时频谱所需
-  let audioCtx = null, analyser = null, srcNode = null, freqData = null, barPeaks = null;
-  let rafId = null, spectrumMode = false;
+  let audioCtx = null, analyser = null, srcNode = null, freqData = null, barPeaks = null, gainNode = null, limiterNode = null;
+  let rafId = null, spectrumMode = false, boost = 1, boostOn = false, limiterOn = true;
 
   /* ---------- 文件处理 ---------- */
   fileInput.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]); });
@@ -333,13 +356,32 @@
     const AC = window.AudioContext || window.webkitAudioContext;
     audioCtx = new AC();
     srcNode = audioCtx.createMediaElementSource(video);
+    // 音量增强：增益节点 + 限制器，避免过载削波
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = boostOn ? boost : 1;
+    const limiter = audioCtx.createDynamicsCompressor();
+    limiterNode = limiter;
+    limiter.threshold.value = -6;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.25;
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;                   // 128 个频点
     analyser.smoothingTimeConstant = 0.9;      // 提高平滑，减少抖动
     freqData = new Uint8Array(analyser.frequencyBinCount);
     barPeaks = new Float32Array(analyser.frequencyBinCount);
-    srcNode.connect(analyser);
+    srcNode.connect(gainNode);
+    limiterNode.connect(analyser);
     analyser.connect(audioCtx.destination);
+    applyLimiter();                          // 按 limiterOn 决定增益后是接限制器还是直连
+  }
+
+  // 限制器开关：开 → 增益接压缩器；关 → 增益直连（旁路限制器）
+  function applyLimiter(){
+    try { gainNode.disconnect(); } catch(e){}
+    if(limiterOn) gainNode.connect(limiterNode);
+    else gainNode.connect(analyser);
   }
 
   function sizeCanvas(cv){
@@ -420,11 +462,9 @@
   video.addEventListener('click', togglePlay);
   video.addEventListener('play', ()=>{
     setPlayIcon(true);
-    if(!isVideo){                      // 仅音频显示实时柱状频谱
-      ensureAudioGraph();
-      if(audioCtx.state === 'suspended') audioCtx.resume();
-      startSpectrum();
-    }
+    ensureAudioGraph();                // 音频/视频都接入音频图（含增益增强）
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    if(!isVideo) startSpectrum();      // 仅音频显示实时柱状频谱
   });
   video.addEventListener('pause', ()=>{
     setPlayIcon(false);
@@ -438,6 +478,9 @@
     playIcon.innerHTML = playing
       ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
       : '<path d="M8 5v14l11-7z"/>';
+    playBtn.classList.remove('pop');
+    void playBtn.offsetWidth;            // 重置动画，重新触发
+    playBtn.classList.add('pop');
   }
 
   function fmt(t){
@@ -455,7 +498,7 @@
   /* ---------- 音量 ---------- */
   vol.addEventListener('input', ()=>{
     video.volume = parseFloat(vol.value);
-    video.muted = video.volume === 0;
+    if(video.volume > 0) video.muted = false;   // 音量>0 取消静音；拖到 0 仅静音不隐藏控件
     updateVolIcon();
   });
   muteBtn.addEventListener('click', ()=>{
@@ -470,7 +513,34 @@
       : (v < 0.5
         ? '<path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16 10a3 3 0 010 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
         : '<path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16 8a5 5 0 010 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>');
+    applyMuteUI();
   }
+  // 仅“静音按钮”触发隐藏：音量滑块 + 整个增强组（开关、倍率滑块、限制器开关）；音量拖到 0 不隐藏
+  function applyMuteUI(){
+    const m = video.muted;
+    vol.classList.toggle('anim-hide', m);
+    boostGroup.classList.toggle('anim-hide', m);
+  }
+
+  /* ---------- 音量增强 ---------- */
+  boostSlider.addEventListener('input', ()=>{
+    boost = parseFloat(boostSlider.value);
+    boostVal.textContent = boost.toFixed(1) + '×';
+    if(boostOn && gainNode) gainNode.gain.value = boost;   // 仅开启时实时生效
+  });
+  boostToggle.addEventListener('click', ()=>{
+    boostOn = !boostOn;
+    boostPanel.classList.toggle('collapsed', !boostOn);
+    boostToggle.classList.toggle('on', boostOn);
+    boostToggle.title = '音量增强：' + (boostOn ? '开' : '关');
+    if(gainNode) gainNode.gain.value = boostOn ? boost : 1;
+  });
+  limiterToggle.addEventListener('click', ()=>{
+    limiterOn = !limiterOn;
+    limiterToggle.classList.toggle('on', limiterOn);
+    limiterToggle.title = '限制器：' + (limiterOn ? '开' : '关');
+    if(gainNode) applyLimiter();
+  });
 
   /* ---------- 倍速 ---------- */
   speedBtn.addEventListener('click', e=>{ e.stopPropagation(); speedMenu.classList.toggle('open'); });
