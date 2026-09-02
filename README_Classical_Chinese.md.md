@@ -1,4 +1,4 @@
-# 本地媒體播放器
+[English](https://github.com/Anan-up/Minimal-Player/blob/main/README.md) | [简体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Simplified_Chinese.md) | [繁体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Classical_Chinese.md.md)
 
 此乃**全然自守於一處之媒體播放器**也（以 HTML、CSS、JS 為之），不假外求，無所憑藉於外物。諸般數據，唯於瀏覽器中就地處理，重隱私而尚簡約。
 
@@ -35,7 +35,7 @@
 ### 五、其觀與感
 - **尚簡**：底色淡，邊纖細，角圓大，去繁飾。
 - **應觸之報**：遊其上則色變，按之則有動，曳之則邊明，其用也暢然。
-
+![project-screenshot](player.png)
 ---
 
 ### 許可
