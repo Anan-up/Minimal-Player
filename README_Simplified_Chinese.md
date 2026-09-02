@@ -1,3 +1,5 @@
+[English](https://github.com/Anan-up/Minimal-Player/blob/main/README.md) | [简体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Simplified_Chinese.md) | [繁体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Classical_Chinese.md.md)
+
 这是一个**完全自包含的本地媒体播放器**（HTML + CSS + JS），无需任何外部依赖，所有数据仅在浏览器本地处理，强调隐私与极简交互。
 
 ---
@@ -33,7 +35,7 @@
 ### 5. 视觉与体验风格
 - **极简主义**：浅色背景、细边框、大圆角，去除了冗余装饰。
 - **交互反馈**：悬停变色、点击动效、拖拽高亮边框，操作手感流畅自然。
-
+![project-screenshot](player.png)
 ---
 ### 许可证
 
