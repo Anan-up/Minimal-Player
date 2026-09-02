@@ -1,3 +1,5 @@
+[English](https://github.com/Anan-up/Minimal-Player/blob/main/README.md) | [简体中文]([https://github.com/Anan-up/Small-fan/blob/main/README_Simplified_Chinese.md](https://github.com/Anan-up/Minimal-Player/blob/main/README_Simplified_Chinese.md)) | [繁体中文](https://github.com/Anan-up/Minimal-Player/blob/main/README_Classical_Chinese.md.md)
+
 # Local Media Player
 
 This is a **fully self-contained local media player** (HTML + CSS + JS) with zero external dependencies. All data is processed locally in the browser only, emphasizing privacy and minimalist interaction.
