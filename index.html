@@ -22,13 +22,14 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
     display:flex;
-    align-items:center;
-    justify-content:center;
     padding:32px 20px;
   }
+  /* 居中交给 margin:auto：内容比视口高时，auto 外边距会归零改为顶部对齐。
+     若用 align-items:center 居中，溢出部分会被推到视口上方且无法滚动到，顶部内容直接丢失。 */
   .app{
     width:100%;
     max-width:760px;
+    margin:auto;
     background:var(--bg);
   }
   .topbar{
@@ -168,8 +169,8 @@
       <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
       </svg>
-      <div class="big">拖入或选择本地媒体</div>
-      <div class="hint">支持 MP4 / WebM / MOV 等视频<br>以及 MP3 / WAV / FLAC / M4A 等音频</div>
+      <div class="big" id="phBig">拖入或选择本地媒体</div>
+      <div class="hint" id="phHint">支持 MP4 / WebM / MOV 等视频<br>以及 MP3 / WAV / FLAC / M4A 等音频</div>
     </div>
   </div>
 
@@ -241,7 +242,11 @@
         volIcon = $('volIcon'), speedBtn = $('speedBtn'), speedMenu = $('speedMenu'),
         fsBtn = $('fsBtn'), spectrum = $('spectrum'), sctx = spectrum.getContext('2d'),
         boostSlider = $('boost'), boostVal = $('boostVal'), boostToggle = $('boostToggle'),
-        boostPanel = $('boostPanel'), boostGroup = $('boostGroup'), limiterToggle = $('limiterToggle');
+        boostPanel = $('boostPanel'), boostGroup = $('boostGroup'), limiterToggle = $('limiterToggle'),
+        phBig = $('phBig'), phHint = $('phHint');
+
+  const PH_TITLE = '拖入或选择本地媒体';
+  const PH_HINT = '支持 MP4 / WebM / MOV 等视频<br>以及 MP3 / WAV / FLAC / M4A 等音频';
 
   const ctx2d = wave.getContext('2d');
   let peaks = null;          // Float32Array 波形峰值
@@ -255,7 +260,11 @@
   let speed = 1;             // 倍速：video.load() 会把 playbackRate 重置回 defaultPlaybackRate
 
   /* ---------- 文件处理 ---------- */
-  fileInput.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]); });
+  fileInput.addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if(f) loadFile(f);
+    fileInput.value = '';   // 清空 value：否则再次选择同一个文件时 change 不会触发
+  });
 
   ['dragenter','dragover'].forEach(ev => stage.addEventListener(ev, e=>{
     e.preventDefault(); stage.classList.add('drag');
@@ -304,6 +313,8 @@
     isVideo = detectVideo(file);
 
     video.classList.toggle('hidden', !isVideo);
+    phBig.textContent = PH_TITLE;                           // 恢复空状态文案（可能被“无法播放”提示改写过）
+    phHint.innerHTML = PH_HINT;
     placeholder.classList.add('hidden');                    // 已载入文件：空状态提示会与音频频谱叠在一起
     spectrum.classList.toggle('hidden', isVideo);           // 音频：舞台显示柱状频谱
     video.src = objectUrl;
@@ -316,6 +327,7 @@
     video.load();
     video.defaultPlaybackRate = speed;                      // load() 会把 playbackRate 重置为 defaultPlaybackRate
     video.playbackRate = speed;
+    setPlayIcon(false);                                     // load() 不会触发 pause 事件，播放中换文件时图标会留在“暂停”状态
     curEl.textContent = '0:00';                             // 清掉上一个文件残留的进度显示
     durEl.textContent = '0:00';
     if(!isVideo) drawSpectrum();                            // 先画静态空闲频谱
@@ -323,11 +335,37 @@
   }
 
   /* ---------- 波形计算 ---------- */
+  // 整轨解码的代价随时长线性上涨（1 小时立体声 48k ≈ 1.3GB PCM）。
+  // 实测 34 分钟的视频（530MB）decodeAudioData 跑 75 秒仍未返回，还会把整个文件读进内存；
+  // 这类文件直接放弃波形——波形区仍可点击跳转，不影响正常播放。
+  const WAVE_MAX_DURATION = 30*60;                  // 秒
+  const WAVE_MAX_BYTES = 256*1024*1024;             // 兜底：拿不到时长时按文件大小判断
+
+  function waitMetadata(ms){
+    if(video.readyState >= 1 && isFinite(video.duration) && video.duration > 0) return Promise.resolve();
+    return new Promise(resolve => {
+      let timer = null;
+      const done = () => {
+        clearTimeout(timer);
+        video.removeEventListener('loadedmetadata', done);
+        video.removeEventListener('error', done);
+        resolve();
+      };
+      video.addEventListener('loadedmetadata', done);
+      video.addEventListener('error', done);
+      timer = setTimeout(done, ms);
+    });
+  }
+
   async function buildWaveform(file, token){
     peaks = null;
     drawWave(0);
     let ac = null;
     try{
+      if(file.size > WAVE_MAX_BYTES) return;                // 超大文件不碰
+      await waitMetadata(4000);                             // 先拿到时长，再决定值不值得解码
+      if(token !== loadToken) return;
+      if(isFinite(video.duration) && video.duration > WAVE_MAX_DURATION) return;
       const buf = await file.arrayBuffer();
       if(token !== loadToken) return;
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -335,7 +373,12 @@
       const decoded = await ac.decodeAudioData(buf);
       if(token !== loadToken) return;                       // 期间又换了文件，丢弃本次结果
       peaks = computePeaks(decoded, 160);                   // 只保留 160 个峰值
-      drawWave(video.currentTime || 0);                     // decoded 随作用域释放（3 分钟音频约 66MB）
+      // 进度必须是 0~1 的比例：其它调用点传的都是 currentTime/duration。
+      // 这里原来传的是 currentTime（秒），解码完成时只要已播过 1 秒以上，
+      // 整条波形就会被画成“已播放”状态，暂停时还会一直错下去（没有 timeupdate 来纠正）。
+      const dur = video.duration;
+      drawWave(dur > 0 && isFinite(dur) ? video.currentTime / dur : 0);
+      // decoded 随作用域释放（3 分钟音频约 66MB）
     }catch(err){
       // 解码失败（如部分视频容器音频不可读）则跳过波形
       if(token !== loadToken) return;
@@ -376,10 +419,7 @@
   }
 
   function drawWave(progress){
-    const w = wave.clientWidth, h = wave.clientHeight;
-    if(wave.width !== w*devicePixelRatio || wave.height !== h*devicePixelRatio){
-      wave.width = w*devicePixelRatio; wave.height = h*devicePixelRatio;
-    }
+    sizeCanvas(wave);
     ctx2d.clearRect(0,0,wave.width,wave.height);
     if(!wave.width || !wave.height) return;
     const mid = wave.height/2;
@@ -393,7 +433,9 @@
       const amp = peaks ? peaks[Math.floor(i*total/n)] : 0.12 + 0.1*Math.abs(Math.sin(i));
       const barH = Math.max(2*dpr, amp*(wave.height*0.9));
       const x = i*(barW+gap);
-      const played = peaks ? (i/n) <= (progress||0) : false;
+      // 柱子 i 覆盖 [i/n,(i+1)/n]：整根都在播放头左侧才算已播放。
+      // 用 (i+1)/n 而不是 i/n，否则进度为 0 时最左边那根也会被点亮。
+      const played = (i+1)/n <= (progress||0);
       ctx2d.fillStyle = played ? '#111111' : '#e2e2e2';
       roundRect(ctx2d, x, mid-barH/2, barW, barH, barW/2);
       ctx2d.fill();
@@ -434,11 +476,12 @@
     else gainNode.connect(analyser);
   }
 
+  // canvas.width 是无符号整数，赋值会被截断。若拿 clientWidth*dpr 的浮点值去比，
+  // 在 125%/150% 这类非整数缩放下永远不相等，于是每帧都重设一次画布尺寸（重新分配 + 清空）。
+  // 这里统一取整后再比较，尺寸不变就不碰画布。
   function sizeCanvas(cv){
-    const w = cv.clientWidth, h = cv.clientHeight;
-    if(cv.width !== w*devicePixelRatio || cv.height !== h*devicePixelRatio){
-      cv.width = w*devicePixelRatio; cv.height = h*devicePixelRatio;
-    }
+    const w = Math.round(cv.clientWidth*devicePixelRatio), h = Math.round(cv.clientHeight*devicePixelRatio);
+    if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
   }
 
   // 频谱画在舞台的 #spectrum 画布上；播放时为实时数据，空闲/暂停时为静态低幅波形
@@ -487,7 +530,7 @@
     spectrumMode = false;
     if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
     drawSpectrum();                          // 回到静态低幅波形
-    if(peaks) drawWave(video.currentTime/video.duration);
+    drawWave(video.currentTime/video.duration);
   }
 
   function roundRect(c,x,y,w,h,r){
@@ -503,7 +546,8 @@
   }
 
   wave.addEventListener('click', e=>{
-    if(!peaks || !isFinite(video.duration) || video.duration <= 0) return;
+    // 不要求 peaks：波形区是页面上唯一的进度条，解码失败或被跳过的文件也必须能点击跳转
+    if(!isFinite(video.duration) || video.duration <= 0) return;
     const rect = wave.getBoundingClientRect();
     if(!rect.width) return;
     const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left)/rect.width));
@@ -537,6 +581,18 @@
     setPlayIcon(false);
     if(!isVideo) stopSpectrum();
   });
+  // 浏览器解不开的容器/编码：必须给出明确提示，否则舞台上只剩一块黑屏、用户不知道发生了什么
+  video.addEventListener('error', ()=>{
+    if(!video.src || !video.error) return;
+    const code = video.error.code;
+    video.classList.add('hidden');                 // 先藏掉黑底，否则深色提示文字压在黑色上看不见
+    phBig.textContent = code === 4 ? '浏览器不支持这个文件'
+                      : code === 3 ? '音视频解码失败'
+                      : code === 2 ? '读取文件时出错'
+                      : '这个文件无法播放';
+    phHint.innerHTML = '它的封装或编码浏览器解不开<br>可试试 MP4（H.264 + AAC）/ WebM，或 MP3 / WAV / FLAC';
+    placeholder.classList.remove('hidden');
+  });
   function setPlayIcon(playing){
     playIcon.innerHTML = playing
       ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
@@ -555,7 +611,7 @@
   video.addEventListener('loadedmetadata', ()=> durEl.textContent = fmt(video.duration));
   video.addEventListener('timeupdate', ()=>{
     curEl.textContent = fmt(video.currentTime);
-    if(peaks) drawWave(video.currentTime/video.duration);   // 波形区始终显示带进度的音轨波形
+    drawWave(video.currentTime/video.duration);   // 波形区始终显示带进度的音轨波形
   });
 
   /* ---------- 音量 ---------- */
