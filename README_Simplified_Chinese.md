@@ -1,11 +1,8 @@
+[English](README.md) | [简体中文](README_Simplified_Chinese.md) | [繁體中文](README_Classical_Chinese.md)
+
 # 极简播放器 / Minimal Player
 
-单文件、零依赖、纯本地的网页音视频播放器。所有解码与播放都在浏览器里完成，**不上传任何数据**。
-
-```
-player/
-└── index.html      # 整个播放器（HTML + CSS + 原生 JS，710 行，无外部资源）
-```
+>单文件、零依赖、纯本地的网页音视频播放器。所有解码与播放都在浏览器里完成，**不上传任何数据**。
 
 ## 快速开始
 
@@ -75,3 +72,10 @@ player/
 ## 浏览器兼容
 
 Chrome / Edge / Firefox / Safari 的现代版本。用到的都是标准 API：`<video>`、Canvas 2D、Web Audio（`AnalyserNode` / `GainNode` / `DynamicsCompressorNode`）、`Fullscreen API`、`URL.createObjectURL`、`File.arrayBuffer`。
+---
+项目截图
+![项目截图](player.png)
+---
+## 许可证
+
+[MIT](LICENSE)
